@@ -1,13 +1,13 @@
-% Filename: PDESolver.m
+% Filename: PDE_Solver.m
 % Author: Maud El-Hachem
 % Queensland University of Technology, Brisbane, Australia, April 2020
 % This function generates the solutions to Equations (8) and (9) with the 
 % following parameters, and plot the density profiles at  t=20,30,40
-% L_u = 0, L_v = S = 60, s(0) = 30, beta = 1, alpha = 0.5
+% L_u = 0, L_v = L = 60, L(0) = 30, beta = 1, alpha = 0.5
 % D = 1, lambda = 1, kappa_u = 1.2195, kappa_v = 0.5, dt = 0.001, 
 % dxi = deta = 0.00025.
 % A second figure is generated with the position of the moving boundary 
-% in function of time s(t).
+% in function of time L(t).
 
 % relative density, Equation (13)
 D = 1;
@@ -18,7 +18,7 @@ kappa_u = 1.2195;
 % kappa_v, Equation (13)
 kappa_v = 0.5;
 % \Delta t, Equation (16) and (17)
-dt = 0.01;
+dt = 0.001;
 % \Delta \xi, Equation (16)
 dxi = 0.00025;
 % \Delta \eta, Equation (17)
@@ -26,19 +26,19 @@ deta = 0.00025;
 % tolerance \epsilon used in Newton-Raphson algorithm
 tol = 1e-08;
 % total length of the domain
-S = 60;
+L = 60;
 % total time
 total_time = 40;
 % total number of steps
 ts = round(total_time/dt+1);
 
-% initial position of the moving boundary L=s(0)
-L = 30;
-% next position of the moving boundary s(t)
-s_t = L;
-% current position of the moving boundary s(t)
+% initial position of the moving boundary s0=L(0)
+s0 = 30;
+% next position of the moving boundary L(t)
+s_t = s0;
+% current position of the moving boundary L(t)
 s_tp = s_t;
-% array of s(t) for all time steps
+% array of L(t) for all time steps
 st_array = zeros(1,ts); 
 
 % spatial domains dicretised, one for each population
@@ -80,12 +80,12 @@ beta = 1;
 alpha = 0.5;
 % phi(x) in Equation (14)
 for i = 1:nodes_xi
-    x = xi(i)*L;
+    x = xi(i)*s0;
     if x < beta
         u_p(i) = alpha;
     else
-        if x < L
-            u_p(i) = alpha-alpha/(L-beta)*(x-beta);
+        if x < s0
+            u_p(i) = alpha*(1-(x-beta)/(s0-beta));
         else
             u_p(i) = 0;
         end
@@ -93,12 +93,12 @@ for i = 1:nodes_xi
 end
 % psi(x) in Equation (15)
 for i = 1:nodes_eta
-    x = (eta(i)-1) * (S-L) + L;
-    if x > S-beta
+    x = (eta(i)-1) * (L-s0) + s0;
+    if x > L-beta
         v_p(i) = alpha;
     else
        if x  > 0
-            v_p(i) = -alpha*(L-beta)/(S-L-beta) + alpha/(S-L-beta)*(x-beta);
+            v_p(i) =  alpha*(x-s0)/(L-s0-beta);
        else
             v_p(i) = 0;
        end
@@ -128,7 +128,7 @@ for j = 1:ts
     while (condition)
 
         % Equations (18) and (19)
-        % boundaries conditions for u(x,t)
+        % boundary conditions for u(x,t)
         % at xi = 0
         coeffA_u(1,1) = 0.0;
         coeffB_u(1,1) = -1.0;
@@ -157,7 +157,7 @@ for j = 1:ts
             u(1,i) = u(1,i) + delta_u(1,i);
         end
 
-        % boundaries conditions for v(x,t)        
+        % boundary conditions for v(x,t)        
         % Equations (18) and (19))
         % at eta = 1
         coeffA_v(1,1) = 0;
@@ -170,16 +170,17 @@ for j = 1:ts
         coeffC_v(1,nodes_eta) = 0;
         Fv(1,nodes_eta) = -1.0*(v(1,nodes_eta)-v(1,nodes_eta-1)); 
 
-        M = S-s_t;
+        % Here L is the size of both domain
+        M = L-s_t;
 
         % J(v) delta v = -F(v)
         % Equation (17)
         for i = 2:nodes_eta-1
-           coeffA_v(1,i) = D/(deta^2*M^2) + ((i-1)*deta*(S-s_t)+s_t-S)/(S-s_t)^2 * (s_t-s_tp)/(2.0*dt*deta);
+           coeffA_v(1,i) = D/(deta^2*M^2) - (2-((i-1)*deta+1))/M * (s_t-s_tp)/(2.0*dt*deta);
            coeffB_v(1,i) = - 2.0*D/(deta^2*M^2)  - 1.0/dt + lambda * (1.0-2.0*v(1,i));
-           coeffC_v(1,i) = D/(deta^2*M^2) - ((i-1)*deta*(S-s_t)+s_t-S)/(S-s_t)^2 * (s_t-s_tp)/(2*dt*deta);
+           coeffC_v(1,i) = D/(deta^2*M^2) + (2-((i-1)*deta+1))/M * (s_t-s_tp)/(2*dt*deta);
            Fv(1,i) = -D*(v(1,i+1) - 2*v(1,i) + v(1,i-1))/(deta^2*M^2) ...
-               + ((i-1)*deta*(S-s_t)+s_t-S)/(S-s_t)^2 * (v(1,i+1) - v(1,i-1)) ...
+               - (2-((i-1)*deta+1))/M * (v(1,i+1) - v(1,i-1)) ...
                * (s_t-s_tp)/(2*dt*deta) + (v(1,i)-v_p(1,i)) / dt - lambda*v(1,i)*(1-v(1,i)) ;
         end   
 
@@ -194,10 +195,10 @@ for j = 1:ts
         if (norm(delta_u,Inf) <= tol && norm(delta_v,Inf) <= tol)
            condition = 0;
         end
-        % Stefan condition used to calculate s(t) from Equation (20)
+        % Stefan condition used to calculate L(t) from Equation (20)
         s_t = s_tp + dt*(-kappa_u*(u(1,nodes_xi)-u(1,nodes_xi-1))/(dxi*s_t) - kappa_v*(v(1,2)-v(1,1))/(deta*M));
     end
-    % updating current s(t)
+    % updating current L(t)
     s_tp = s_t;
     % updating current u(x,t) and v(x,t)
     u_p = u;
@@ -207,7 +208,7 @@ for j = 1:ts
     if (t == 20 || t == 30 || t == 40)
         plot(xi(1:nodes_xi)*s_t, u, 'k-','Color',colors(1,1:3), 'LineWidth',2 ,'DisplayName', '$u(x,20)$');
 
-        plot((eta(1:nodes_eta)-1)*(S-s_t)+s_t, v,'r-','Color',colors(2,1:3),'LineWidth',2,'DisplayName', '$v(x,20)$' );;
+        plot((eta(1:nodes_eta)-1)*(L-s_t)+s_t, v,'r-','Color',colors(2,1:3),'LineWidth',2,'DisplayName', '$v(x,20)$' );;
     end
 end
 %%
@@ -223,9 +224,9 @@ box on
 hold off
 
 figure
-% plotting s(t)
-plot((1:ts)*dt, st_array,'Color','m','LineWidth',2,'DisplayName', 's(t)' );
-ylabel('$s(t)$','interpreter','latex','fontsize',18);
+% plotting L(t)
+plot((1:ts)*dt, st_array,'Color','m','LineWidth',2,'DisplayName', 'L(t)' );
+ylabel('$L(t)$','interpreter','latex','fontsize',18);
 xlabel('$t$','interpreter','latex','fontsize',18);
 xlim([0 40]);
 set(groot, 'defaultAxesTickLabelInterpreter','latex');
